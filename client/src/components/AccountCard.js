@@ -58,7 +58,7 @@ function AccountCard({ account }) {
         <div className="metric">
           <span className="metric-label">Monthly Spend</span>
           <span className="metric-value">
-            ${account.metrics.monthlySpend.toLocaleString('en-US', {
+            ${(account.metrics.monthlySpend ?? 0).toLocaleString('en-US', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -66,7 +66,7 @@ function AccountCard({ account }) {
         </div>
         <div className="metric">
           <span className="metric-label">CPL</span>
-          <span className="metric-value">${account.metrics.costPerLead.toFixed(2)}</span>
+          <span className="metric-value">${(account.metrics.costPerLead ?? 0).toFixed(2)}</span>
         </div>
         <div className="metric">
           <span className="metric-label">Leads</span>
@@ -78,7 +78,7 @@ function AccountCard({ account }) {
         </div>
         <div className="metric">
           <span className="metric-label">ROAS</span>
-          <span className="metric-value">{account.metrics.roas.toFixed(2)}x</span>
+          <span className="metric-value">{(account.metrics.roas ?? 0).toFixed(2)}x</span>
         </div>
       </div>
     </div>

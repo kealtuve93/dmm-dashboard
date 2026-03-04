@@ -120,7 +120,7 @@ function AccountDetail() {
         </div>
         <div className="metric-card">
           <span className="metric-label">Cost Per Lead</span>
-          <span className="metric-value">${account.metrics.costPerLead.toFixed(2)}</span>
+          <span className="metric-value">${(account.metrics.costPerLead ?? 0).toFixed(2)}</span>
         </div>
         <div className="metric-card">
           <span className="metric-label">Total Leads</span>
@@ -132,7 +132,7 @@ function AccountDetail() {
         </div>
         <div className="metric-card">
           <span className="metric-label">ROAS</span>
-          <span className="metric-value">{account.metrics.roas.toFixed(2)}x</span>
+          <span className="metric-value">{(account.metrics.roas ?? 0).toFixed(2)}x</span>
         </div>
       </div>
 

@@ -56,7 +56,7 @@ function CampaignRow({ campaign, onSelect, isSelected }) {
         </div>
         <div className="metric-item">
           <span className="metric-label">CPL</span>
-          <span className="metric-value">${campaign.currentCPL.toFixed(2)}</span>
+          <span className="metric-value">${(campaign.currentCPL ?? 0).toFixed(2)}</span>
         </div>
         <div className="metric-item">
           <span className="metric-label">Leads</span>
@@ -68,18 +68,18 @@ function CampaignRow({ campaign, onSelect, isSelected }) {
         </div>
         <div className="metric-item">
           <span className="metric-label">CTR</span>
-          <span className="metric-value">{campaign.currentCTR.toFixed(2)}%</span>
+          <span className="metric-value">{(campaign.currentCTR ?? 0).toFixed(2)}%</span>
         </div>
         <div className="metric-item">
           <span className="metric-label">ROAS</span>
-          <span className="metric-value">{campaign.currentRoas.toFixed(2)}x</span>
+          <span className="metric-value">{(campaign.currentRoas ?? 0).toFixed(2)}x</span>
         </div>
       </div>
 
       <div
         className="campaign-health"
         style={{ backgroundColor: getHealthColor(campaign.currentCPL) }}
-        title={`CPL: $${campaign.currentCPL.toFixed(2)}`}
+        title={`CPL: $${(campaign.currentCPL ?? 0).toFixed(2)}`}
       />
     </div>
   );
