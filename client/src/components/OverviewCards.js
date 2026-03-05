@@ -25,8 +25,8 @@ function OverviewCards({ summary }) {
       color: 'purple',
     },
     {
-      title: 'Total Appointments Booked',
-      value: summary?.totalAppointments || 0,
+      title: 'Total Opportunities',
+      value: summary?.totalOpportunities || 0,
       icon: Calendar,
       color: 'orange',
     },

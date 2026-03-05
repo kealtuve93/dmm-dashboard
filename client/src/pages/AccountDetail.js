@@ -127,12 +127,16 @@ function AccountDetail() {
           <span className="metric-value">{account.metrics.leads}</span>
         </div>
         <div className="metric-card">
-          <span className="metric-label">Appointments Booked</span>
-          <span className="metric-value">{account.metrics.appointmentsBooked}</span>
+          <span className="metric-label">Opportunities</span>
+          <span className="metric-value">{account.metrics.opportunities || 0}</span>
         </div>
         <div className="metric-card">
-          <span className="metric-label">ROAS</span>
-          <span className="metric-value">{(account.metrics.roas ?? 0).toFixed(2)}x</span>
+          <span className="metric-label">Won</span>
+          <span className="metric-value">{account.metrics.opportunitiesWon || 0}</span>
+        </div>
+        <div className="metric-card">
+          <span className="metric-label">Conv. Rate</span>
+          <span className="metric-value">{account.metrics.conversionRate || 0}%</span>
         </div>
       </div>
 

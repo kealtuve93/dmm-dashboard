@@ -222,27 +222,9 @@ async function getAllAccounts(days = 30) {
       GROUP BY account_id
     `;
 
-    // Query 3: Appointments from raw Airbyte Calendar_Events (491K rows)
-    // The Dataform ghl_appointments table is empty (broken transform),
-    // so we parse the raw _airbyte_data JSON directly
-    const apptsQuery = `
-      SELECT
-        JSON_EXTRACT_SCALAR(_airbyte_data, '$.locationId') as locationId,
-        COUNT(*) as totalAppointments,
-        COUNTIF(JSON_EXTRACT_SCALAR(_airbyte_data, '$.appointmentStatus') = 'showed') as showed,
-        COUNTIF(JSON_EXTRACT_SCALAR(_airbyte_data, '$.appointmentStatus') = 'noshow') as noshow,
-        COUNTIF(JSON_EXTRACT_SCALAR(_airbyte_data, '$.appointmentStatus') = 'confirmed') as confirmed,
-        COUNTIF(JSON_EXTRACT_SCALAR(_airbyte_data, '$.appointmentStatus') = 'cancelled') as cancelled
-      FROM \`dance-reporting.airbyte_internal.ghl_data_raw__stream_Calendar_Events\`
-      WHERE PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez',
-            JSON_EXTRACT_SCALAR(_airbyte_data, '$.startTime'))
-            >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY)
-        AND JSON_EXTRACT_SCALAR(_airbyte_data, '$.deleted') = 'false'
-      GROUP BY locationId
-    `;
-
-    // Query 4: Opportunities from ghl_opportunities2 (91K rows — working transform)
-    // Tracks pipeline status: won/lost/open per location
+    // Query 3: GHL Opportunities from ghl_opportunities2 (91K rows — working transform)
+    // Each opportunity = a lead in the GHL pipeline
+    // Status tracks conversion: open → won (registered) or lost
     const oppsQuery = `
       SELECT locationId,
              COUNT(*) as totalOpps,
@@ -254,14 +236,10 @@ async function getAllAccounts(days = 30) {
       GROUP BY locationId
     `;
 
-    // Run all four queries in parallel
-    const [leadsData, spendData, apptsData, oppsData] = await Promise.all([
+    // Run all three queries in parallel
+    const [leadsData, spendData, oppsData] = await Promise.all([
       bigqueryClient.query({ query: leadsQuery }),
       bigqueryClient.query({ query: spendQuery }),
-      bigqueryClient.query({ query: apptsQuery }).catch(err => {
-        console.error('Raw Calendar_Events query failed:', err.message);
-        return [[]];
-      }),
       bigqueryClient.query({ query: oppsQuery }).catch(err => {
         console.error('ghl_opportunities2 query failed:', err.message);
         return [[]];
@@ -270,14 +248,12 @@ async function getAllAccounts(days = 30) {
 
     const leads = leadsData[0];
     const spend = spendData[0];
-    const appts = apptsData[0];
     const opps = oppsData[0];
 
     // Create lookup maps
     const leadsMap = {};  // Meta leads by metaAccountId
     const spendMap = {};  // Spend by metaAccountId
-    const apptsMap = {}; // Appointments by locationId (from raw Calendar_Events)
-    const oppsMap = {};  // Opportunities by locationId (from ghl_opportunities2)
+    const oppsMap = {};   // GHL opportunities by locationId
 
     leads.forEach(row => {
       leadsMap[row.metaAccountId] = parseInt(row.leads) || 0;
@@ -289,16 +265,6 @@ async function getAllAccounts(days = 30) {
         totalImpressions: row.totalImpressions || 0,
         totalClicks: row.totalClicks || 0,
         avgCtr: parseFloat(row.avgCtr) || 0
-      };
-    });
-
-    appts.forEach(row => {
-      apptsMap[row.locationId] = {
-        totalAppointments: parseInt(row.totalAppointments) || 0,
-        showed: parseInt(row.showed) || 0,
-        noshow: parseInt(row.noshow) || 0,
-        confirmed: parseInt(row.confirmed) || 0,
-        cancelled: parseInt(row.cancelled) || 0
       };
     });
 
@@ -317,7 +283,6 @@ async function getAllAccounts(days = 30) {
     CLIENTS.forEach(client => {
       const clientLeads = leadsMap[client.metaAccountId] || 0;
       const clientSpend = spendMap[client.metaAccountId] || { totalSpend: 0, totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
-      const clientAppts = apptsMap[client.ghlLocationId] || { totalAppointments: 0, showed: 0, noshow: 0, confirmed: 0, cancelled: 0 };
       const clientOpps = oppsMap[client.ghlLocationId] || { totalOpps: 0, won: 0, lost: 0, open: 0 };
 
       const totalSpend = clientSpend.totalSpend;
@@ -334,15 +299,11 @@ async function getAllAccounts(days = 30) {
           monthlySpend: totalSpend,
           leads: clientLeads,
           costPerLead: cpl ? parseFloat(cpl.toFixed(2)) : null,
-          appointmentsBooked: clientAppts.totalAppointments,
-          appointmentsShowed: clientAppts.showed,
-          appointmentsNoShow: clientAppts.noshow,
-          appointmentsConfirmed: clientAppts.confirmed,
           opportunities: clientOpps.totalOpps,
           opportunitiesWon: clientOpps.won,
           opportunitiesLost: clientOpps.lost,
           opportunitiesOpen: clientOpps.open,
-          conversionRate: clientLeads > 0 ? parseFloat(((clientAppts.totalAppointments / clientLeads) * 100).toFixed(2)) : 0,
+          conversionRate: clientOpps.totalOpps > 0 ? parseFloat(((clientOpps.won / clientOpps.totalOpps) * 100).toFixed(2)) : 0,
           roas: 0
         }
       });
@@ -543,14 +504,16 @@ async function getOverviewStats(days = 30) {
       totalSpend: 0,
       totalLeads: 0,
       avgCPL: 0,
-      totalAppointments: 0
+      totalOpportunities: 0,
+      totalWon: 0
     };
 
     accounts.forEach(account => {
       stats.accountsByStatus[account.status]++;
       stats.totalSpend += account.metrics.monthlySpend || 0;
       stats.totalLeads += account.metrics.leads || 0;
-      stats.totalAppointments += account.metrics.appointmentsBooked || 0;
+      stats.totalOpportunities += account.metrics.opportunities || 0;
+      stats.totalWon += account.metrics.opportunitiesWon || 0;
     });
 
     // Calculate average CPL
