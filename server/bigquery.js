@@ -56,8 +56,7 @@ const DEMO_DATA = {
 
 let bigqueryClient = null;
 let isConnected = false;
-let cacheTimestamp = 0;
-let cachedAccounts = null;
+let cacheByDays = {}; // { '7': { data, timestamp }, '30': {...}, '90': {...} }
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 async function initialize() {
@@ -145,18 +144,18 @@ function getHealthStatus(spend, leads, opportunities) {
 
   const cpl = leads > 0 ? spend / leads : Infinity;
 
-  // Green: CPL < 25 AND opportunities >= 3
-  if (cpl < 25 && opportunities >= 3) {
+  // Green: CPL <= $15
+  if (cpl <= 15) {
     return 'green';
   }
 
-  // Red: CPL > 45 OR no opportunities with active spend
-  if (cpl > 45 || opportunities === 0) {
-    return 'red';
+  // Yellow: CPL $16–$25
+  if (cpl <= 25) {
+    return 'yellow';
   }
 
-  // Yellow: moderate performance
-  return 'yellow';
+  // Red: CPL > $25
+  return 'red';
 }
 
 function getStatusReason(status, cpl, opportunities, spend) {
@@ -165,26 +164,28 @@ function getStatusReason(status, cpl, opportunities, spend) {
   }
 
   if (status === 'green') {
-    return `Excellent efficiency (CPL: $${cpl.toFixed(2)}) with strong lead conversion`;
+    return `Strong efficiency — CPL $${cpl.toFixed(2)} (target: ≤$15)`;
   }
 
   if (status === 'red') {
-    if (cpl > 45) {
-      return `High cost per lead ($${cpl.toFixed(2)}) - optimize ad targeting`;
+    if (!isFinite(cpl) || cpl === 0) {
+      return 'No leads recorded — review campaign messaging or audience';
     }
-    return 'No opportunities booked - review campaign messaging or audience';
+    return `High cost per lead ($${cpl.toFixed(2)}) — target is ≤$15`;
   }
 
   // Yellow
-  return `Moderate performance (CPL: $${cpl.toFixed(2)}) - monitor opportunities`;
+  return `CPL $${cpl.toFixed(2)} — above target ($15), monitor closely`;
 }
 
-async function getAllAccounts() {
+async function getAllAccounts(days = 30) {
+  const daysKey = String(days);
   try {
-    // Check cache
-    if (cachedAccounts && Date.now() - cacheTimestamp < CACHE_TTL) {
-      console.log('Returning cached account data');
-      return cachedAccounts;
+    // Check cache for this days period
+    const cached = cacheByDays[daysKey];
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`Returning cached account data (${days}d)`);
+      return cached.data;
     }
 
     if (!isConnected || !bigqueryClient) {
@@ -198,7 +199,7 @@ async function getAllAccounts() {
     const leadsQuery = `
       SELECT locationId, COUNT(*) as leads
       FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
+      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY))
       GROUP BY locationId
     `;
 
@@ -206,7 +207,7 @@ async function getAllAccounts() {
     const opportunitiesQuery = `
       SELECT locationId, SUM(total_appts_booked) as opportunities
       FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
+      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY))
       GROUP BY locationId
     `;
 
@@ -218,7 +219,7 @@ async function getAllAccounts() {
              SUM(inline_link_clicks) as totalClicks,
              ROUND(AVG(ctr), 4) as avgCtr
       FROM \`dance-reporting.facebook_ads.basic_campaign\`
-      WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)
       GROUP BY account_id
     `;
 
@@ -290,9 +291,8 @@ async function getAllAccounts() {
     const queryTime = Date.now() - startTime;
     console.log(`BigQuery query completed in ${queryTime}ms`);
 
-    // Cache results
-    cachedAccounts = results;
-    cacheTimestamp = Date.now();
+    // Cache results per days period
+    cacheByDays[daysKey] = { data: results, timestamp: Date.now() };
 
     return results;
   } catch (error) {
@@ -468,9 +468,9 @@ async function getDailyMetrics(metaAccountId, campaignId = null) {
   }
 }
 
-async function getOverviewStats() {
+async function getOverviewStats(days = 30) {
   try {
-    const accounts = await getAllAccounts();
+    const accounts = await getAllAccounts(days);
 
     const stats = {
       totalAccounts: accounts.filter(a => a.status !== 'unknown').length,

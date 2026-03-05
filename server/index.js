@@ -93,7 +93,8 @@ app.get('/api/health', async (req, res) => {
  */
 app.get('/api/accounts', async (req, res) => {
   try {
-    const accounts = await bigquery.getAllAccounts();
+    const days = parseInt(req.query.days) || 30;
+    const accounts = await bigquery.getAllAccounts(days);
 
     // Format response with summary metrics
     const accountsSummary = accounts.map(account => ({
@@ -253,7 +254,8 @@ app.get('/api/campaigns/:id', async (req, res) => {
  */
 app.get('/api/overview', async (req, res) => {
   try {
-    const stats = await bigquery.getOverviewStats();
+    const days = parseInt(req.query.days) || 30;
+    const stats = await bigquery.getOverviewStats(days);
 
     res.json({
       success: true,

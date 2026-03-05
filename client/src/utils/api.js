@@ -26,8 +26,8 @@ const apiCall = async (endpoint, options = {}) => {
   }
 };
 
-export const getAccounts = async () => {
-  const data = await apiCall('/accounts');
+export const getAccounts = async (days = 30) => {
+  const data = await apiCall(`/accounts?days=${days}`);
   return data.accounts || [];
 };
 
@@ -46,8 +46,8 @@ export const getCampaignById = async (campaignId) => {
   return data.campaign || null;
 };
 
-export const getOverview = async () => {
-  const data = await apiCall('/overview');
+export const getOverview = async (days = 30) => {
+  const data = await apiCall(`/overview?days=${days}`);
   return data.overview || {};
 };
 

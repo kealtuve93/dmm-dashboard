@@ -4,6 +4,12 @@ import StatusFilter from '../components/StatusFilter';
 import AccountCard from '../components/AccountCard';
 import { getAccounts, getOverview } from '../utils/api';
 
+const TIME_PERIODS = [
+  { label: '7 Days', value: 7 },
+  { label: '30 Days', value: 30 },
+  { label: '90 Days', value: 90 },
+];
+
 function Dashboard() {
   const [accounts, setAccounts] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -11,19 +17,24 @@ function Dashboard() {
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedManager, setSelectedManager] = useState('');
   const [sortBy, setSortBy] = useState('name');
+  const [selectedDays, setSelectedDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(selectedDays);
+  }, [selectedDays]);
 
-  const fetchData = async () => {
+  const handleDaysChange = (days) => {
+    setSelectedDays(days);
+  };
+
+  const fetchData = async (days) => {
     try {
       setLoading(true);
       const [accountsList, overviewData] = await Promise.all([
-        getAccounts(),
-        getOverview(),
+        getAccounts(days),
+        getOverview(days),
       ]);
 
       setAccounts(accountsList);
@@ -112,6 +123,18 @@ function Dashboard() {
       <OverviewCards summary={summary} />
 
       <div className="dashboard-controls">
+        <div className="time-period-filter">
+          {TIME_PERIODS.map((period) => (
+            <button
+              key={period.value}
+              className={`time-button ${selectedDays === period.value ? 'active' : ''}`}
+              onClick={() => handleDaysChange(period.value)}
+            >
+              {period.label}
+            </button>
+          ))}
+        </div>
+
         <StatusFilter
           selectedStatus={selectedStatus}
           onStatusChange={setSelectedStatus}
