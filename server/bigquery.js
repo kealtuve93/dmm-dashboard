@@ -194,18 +194,18 @@ async function getAllAccounts() {
 
     const startTime = Date.now();
 
-    // Query 1: Leads per locationId
+    // Query 1: Leads per locationId (count opportunities as leads)
     const leadsQuery = `
       SELECT locationId, COUNT(*) as leads
-      FROM \`dance-reporting.ghl_data.Contacts\`
-      WHERE dateAdded >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
+      FROM \`dance-reporting.dataform.ghl_opportunities\`
+      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
       GROUP BY locationId
     `;
 
-    // Query 2: Opportunities per locationId
+    // Query 2: Booked appointments per locationId
     const opportunitiesQuery = `
-      SELECT locationId, COUNT(*) as opportunities
-      FROM \`dance-reporting.ghl_data.Opportunities\`
+      SELECT locationId, SUM(total_appts_booked) as opportunities
+      FROM \`dance-reporting.dataform.ghl_opportunities\`
       WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY))
       GROUP BY locationId
     `;
