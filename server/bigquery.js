@@ -210,7 +210,7 @@ async function getAllAccounts(days = 30) {
       GROUP BY bc.account_id
     `;
 
-    // Query 2: Spend + metrics per account (same as before)
+    // Query 2: Spend + metrics per account
     const spendQuery = `
       SELECT CAST(account_id AS STRING) as metaAccountId,
              ROUND(SUM(spend), 2) as totalSpend,
@@ -222,17 +222,36 @@ async function getAllAccounts(days = 30) {
       GROUP BY account_id
     `;
 
-    const [leadsData, spendData] = await Promise.all([
+    // Query 3: GHL opportunities from stg_opportunities (96K rows)
+    // stg_opportunities has data; ghl_opportunities is empty due to broken Dataform transform
+    const ghlOppsQuery = `
+      SELECT locationId,
+             COUNT(*) as ghlLeads,
+             COUNTIF(status = 'won') as won,
+             COUNTIF(status = 'lost') as lost
+      FROM \`dance-reporting.dataform.stg_opportunities\`
+      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
+      GROUP BY locationId
+    `;
+
+    // Run all three queries in parallel
+    const [leadsData, spendData, ghlData] = await Promise.all([
       bigqueryClient.query({ query: leadsQuery }),
-      bigqueryClient.query({ query: spendQuery })
+      bigqueryClient.query({ query: spendQuery }),
+      bigqueryClient.query({ query: ghlOppsQuery }).catch(err => {
+        console.error('GHL stg_opportunities query failed:', err.message);
+        return [[]]; // graceful fallback — don't break the whole page
+      })
     ]);
 
     const leads = leadsData[0];
     const spend = spendData[0];
+    const ghlOpps = ghlData[0];
 
-    // Create lookup maps — both keyed by metaAccountId now
-    const leadsMap = {};
-    const spendMap = {};
+    // Create lookup maps
+    const leadsMap = {};  // Meta leads by metaAccountId
+    const spendMap = {};  // Spend by metaAccountId
+    const ghlMap = {};    // GHL opportunities by locationId
 
     leads.forEach(row => {
       leadsMap[row.metaAccountId] = parseInt(row.leads) || 0;
@@ -247,12 +266,21 @@ async function getAllAccounts(days = 30) {
       };
     });
 
-    // Build results
+    ghlOpps.forEach(row => {
+      ghlMap[row.locationId] = {
+        ghlLeads: parseInt(row.ghlLeads) || 0,
+        won: parseInt(row.won) || 0,
+        lost: parseInt(row.lost) || 0
+      };
+    });
+
+    // Build results — combine Meta spend/leads with GHL opportunity data
     const results = [];
 
     CLIENTS.forEach(client => {
       const clientLeads = leadsMap[client.metaAccountId] || 0;
       const clientSpend = spendMap[client.metaAccountId] || { totalSpend: 0, totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
+      const clientGhl = ghlMap[client.ghlLocationId] || { ghlLeads: 0, won: 0, lost: 0 };
 
       const totalSpend = clientSpend.totalSpend;
       const cpl = clientLeads > 0 ? totalSpend / clientLeads : null;
@@ -268,8 +296,8 @@ async function getAllAccounts(days = 30) {
           monthlySpend: totalSpend,
           leads: clientLeads,
           costPerLead: cpl ? parseFloat(cpl.toFixed(2)) : null,
-          appointmentsBooked: 0, // GHL appointments not available yet
-          conversionRate: 0,
+          appointmentsBooked: clientGhl.ghlLeads,
+          conversionRate: clientLeads > 0 ? parseFloat(((clientGhl.ghlLeads / clientLeads) * 100).toFixed(2)) : 0,
           roas: 0
         }
       });
