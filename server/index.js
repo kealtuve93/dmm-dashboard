@@ -268,13 +268,33 @@ app.get('/api/debug', async (req, res) => {
   // Run GHL diagnostic queries — explore appointments table
   const queries = {};
   const fullQueries = {
-    ghl_appointments_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_appointments' ORDER BY ordinal_position`,
-    ghl_appointments_sample: `SELECT * FROM \`dance-reporting.dataform.ghl_appointments\` LIMIT 3`,
-    ghl_appointments_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\``,
-    ghl_appointments_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
-    ghl_appointments_statuses: `SELECT appointmentStatus, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\` GROUP BY appointmentStatus ORDER BY cnt DESC`,
-    ghl_calendars_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_calendars' ORDER BY ordinal_position`,
-    calendar_events_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Calendar_Events\``,
+    // 1. Find all appointment-related tables across ALL datasets
+    appt_tables_all_datasets: `
+      SELECT table_schema as dataset, table_name, row_count
+      FROM \`dance-reporting.region-us.INFORMATION_SCHEMA.TABLE_STORAGE\`
+      WHERE LOWER(table_name) LIKE '%appoint%' OR LOWER(table_name) LIKE '%calendar%'
+      ORDER BY table_schema, table_name
+    `,
+    // 2. List all tables in ghl_master with row counts
+    ghl_master_tables: `
+      SELECT table_name, row_count
+      FROM \`dance-reporting.ghl_master.INFORMATION_SCHEMA.TABLE_STORAGE\`
+      ORDER BY row_count DESC
+      LIMIT 20
+    `,
+    // 3. Check for stg_appointments in dataform
+    stg_appointments_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_appointments\``,
+    // 4. stg_appointments schema if it exists
+    stg_appointments_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'stg_appointments' ORDER BY ordinal_position`,
+    // 5. stg_appointments sample
+    stg_appointments_sample: `SELECT * FROM \`dance-reporting.dataform.stg_appointments\` LIMIT 3`,
+    // 6. All dataform tables with row counts
+    dataform_tables: `
+      SELECT table_name, row_count
+      FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.TABLE_STORAGE\`
+      ORDER BY row_count DESC
+      LIMIT 30
+    `,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
