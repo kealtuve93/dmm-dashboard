@@ -249,6 +249,56 @@ app.get('/api/campaigns/:id', async (req, res) => {
 });
 
 /**
+ * GET /api/debug
+ * Temporary: runs each BigQuery query individually and returns errors
+ */
+app.get('/api/debug', async (req, res) => {
+  const { BigQuery } = require('@google-cloud/bigquery');
+  const bq = require('./bigquery');
+  const results = { connected: bq.isConnected(), mode: operationMode, queries: {} };
+
+  // Try each query individually using the bigqueryClient via a test
+  try {
+    const testResult = await bq.testConnection();
+    results.queries.connection = 'OK';
+  } catch (e) {
+    results.queries.connection = e.message;
+  }
+
+  // Run leads query directly
+  const queries = {
+    leads: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)) GROUP BY locationId LIMIT 5`,
+    opportunities: `SELECT locationId, SUM(total_appts_booked) as opps FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)) GROUP BY locationId LIMIT 5`,
+    spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
+  };
+
+  // We need direct bigqueryClient access - re-run via module internals
+  // Use testConnection as a proxy to see if client works
+  const credRaw = process.env.BIGQUERY_CREDENTIALS;
+  if (credRaw) {
+    try {
+      const creds = JSON.parse(credRaw);
+      const client = new BigQuery({ projectId: creds.project_id || 'dance-reporting', credentials: creds });
+      for (const [name, sql] of Object.entries(queries)) {
+        try {
+          const [rows] = await client.query({ query: sql });
+          results.queries[name] = `OK — ${rows.length} rows`;
+          if (rows.length > 0) results.queries[`${name}_sample`] = rows[0];
+        } catch (e) {
+          results.queries[name] = `ERROR: ${e.message}`;
+        }
+      }
+    } catch (e) {
+      results.credParse = `ERROR: ${e.message}`;
+    }
+  } else {
+    results.credParse = 'No BIGQUERY_CREDENTIALS env var found';
+  }
+
+  res.json(results);
+});
+
+/**
  * GET /api/overview
  * Returns summary stats (total accounts, total spend, avg CPL, etc.)
  */
