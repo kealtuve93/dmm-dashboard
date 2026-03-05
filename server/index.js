@@ -265,16 +265,19 @@ app.get('/api/debug', async (req, res) => {
     results.queries.connection = e.message;
   }
 
-  // Run diagnostic queries
+  // Run diagnostic queries — "full" queries return all rows, not just sample
   const queries = {
-    leads_30d: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
     leads_all_time: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` GROUP BY locationId ORDER BY leads DESC LIMIT 5`,
     spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
-    fb_tables: `SELECT table_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
-    fb_campaign_columns: `SELECT column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'basic_campaign' ORDER BY ordinal_position`,
-    fb_all_columns: `SELECT table_name, column_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE LOWER(column_name) LIKE '%lead%' OR LOWER(column_name) LIKE '%action%' OR LOWER(column_name) LIKE '%conver%' OR LOWER(column_name) LIKE '%result%' ORDER BY table_name, column_name`,
+  };
+  const fullQueries = {
+    fb_lead_action_columns: `SELECT table_name, column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE LOWER(column_name) LIKE '%lead%' OR LOWER(column_name) LIKE '%action%' OR LOWER(column_name) LIKE '%conver%' OR LOWER(column_name) LIKE '%result%' ORDER BY table_name, column_name`,
     dataform_tables: `SELECT table_name FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
     all_datasets: `SELECT schema_name FROM \`dance-reporting.INFORMATION_SCHEMA.SCHEMATA\` ORDER BY schema_name`,
+    basic_campaign_columns: `SELECT column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'basic_campaign' ORDER BY ordinal_position`,
+    ghl_data_tables: `SELECT table_name FROM \`dance-reporting.ghl_data.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
+    ghl_data_row_counts: `SELECT 'Contacts' as tbl, COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Contacts\` UNION ALL SELECT 'Opportunities', COUNT(*) FROM \`dance-reporting.ghl_data.Opportunities\``,
+    action_tables_sample: `SELECT table_name, column_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name LIKE '%action%' OR table_name LIKE '%lead%' ORDER BY table_name, column_name`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
@@ -284,11 +287,21 @@ app.get('/api/debug', async (req, res) => {
     try {
       const creds = JSON.parse(credRaw);
       const client = new BigQuery({ projectId: creds.project_id || 'dance-reporting', credentials: creds });
+      // Sample queries (show first row only)
       for (const [name, sql] of Object.entries(queries)) {
         try {
           const [rows] = await client.query({ query: sql });
           results.queries[name] = `OK — ${rows.length} rows`;
           if (rows.length > 0) results.queries[`${name}_sample`] = rows[0];
+        } catch (e) {
+          results.queries[name] = `ERROR: ${e.message}`;
+        }
+      }
+      // Full queries (return all rows)
+      for (const [name, sql] of Object.entries(fullQueries)) {
+        try {
+          const [rows] = await client.query({ query: sql });
+          results.queries[name] = rows;
         } catch (e) {
           results.queries[name] = `ERROR: ${e.message}`;
         }
