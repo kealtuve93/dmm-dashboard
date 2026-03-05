@@ -112,7 +112,7 @@ function AccountDetail() {
         <div className="metric-card">
           <span className="metric-label">Monthly Spend</span>
           <span className="metric-value">
-            ${account.metrics.monthlySpend.toLocaleString('en-US', {
+            ${(account.metrics.monthlySpend ?? 0).toLocaleString('en-US', {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}

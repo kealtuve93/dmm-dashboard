@@ -372,7 +372,7 @@ async function getAccountCampaigns(locationId) {
         status: isActive ? 'active' : 'paused',
         offerType: inferOfferType(row.campaign_name),
         currentCPL: cpl ? parseFloat(cpl.toFixed(2)) : null,
-        currentCTR: parseFloat((row.avgCtr * 100).toFixed(2)) + '%',
+        currentCTR: parseFloat((row.avgCtr * 100).toFixed(2)),
         currentRoas: parseFloat(roas.toFixed(2)),
         dailyMetrics: {
           spend: row.totalSpend,
@@ -522,7 +522,7 @@ async function getCampaignById(campaignId) {
       offerType: inferOfferType(rows[0].campaign_name),
       status: 'active',
       currentCPL: null,
-      currentCTR: parseFloat((avgCtr * 100).toFixed(2)) + '%',
+      currentCTR: parseFloat((avgCtr * 100).toFixed(2)),
       currentRoas: null,
       totalSpend: parseFloat(totalSpend.toFixed(2)),
       totalClicks,
