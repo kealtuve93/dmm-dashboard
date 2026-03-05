@@ -272,6 +272,7 @@ app.get('/api/debug', async (req, res) => {
     ghl_appointments_sample: `SELECT * FROM \`dance-reporting.dataform.ghl_appointments\` LIMIT 3`,
     ghl_appointments_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\``,
     ghl_appointments_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
+    ghl_appointments_statuses: `SELECT appointmentStatus, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\` GROUP BY appointmentStatus ORDER BY cnt DESC`,
     ghl_calendars_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_calendars' ORDER BY ordinal_position`,
     calendar_events_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Calendar_Events\``,
   };

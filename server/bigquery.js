@@ -222,16 +222,17 @@ async function getAllAccounts(days = 30) {
       GROUP BY account_id
     `;
 
-    // Query 3: GHL opportunities from stg_opportunities (96K rows)
-    // stg_opportunities has data; ghl_opportunities is empty due to broken Dataform transform
-    // createdAt is TIMESTAMP in stg_opportunities — use TIMESTAMP_SUB, not DATETIME_SUB
-    const ghlOppsQuery = `
+    // Query 3: GHL appointments from ghl_appointments (Dataform view)
+    // Counts booked and showed appointments per location
+    const ghlApptsQuery = `
       SELECT locationId,
-             COUNT(*) as ghlLeads,
-             COUNTIF(status = 'won') as won,
-             COUNTIF(status = 'lost') as lost
-      FROM \`dance-reporting.dataform.stg_opportunities\`
-      WHERE createdAt >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY)
+             COUNT(*) as totalAppointments,
+             COUNTIF(appointmentStatus = 'showed') as showed,
+             COUNTIF(appointmentStatus = 'noshow') as noshow,
+             COUNTIF(appointmentStatus = 'confirmed') as confirmed,
+             COUNTIF(appointmentStatus = 'cancelled') as cancelled
+      FROM \`dance-reporting.dataform.ghl_appointments\`
+      WHERE startTime >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY)
       GROUP BY locationId
     `;
 
@@ -239,20 +240,20 @@ async function getAllAccounts(days = 30) {
     const [leadsData, spendData, ghlData] = await Promise.all([
       bigqueryClient.query({ query: leadsQuery }),
       bigqueryClient.query({ query: spendQuery }),
-      bigqueryClient.query({ query: ghlOppsQuery }).catch(err => {
-        console.error('GHL stg_opportunities query failed:', err.message);
+      bigqueryClient.query({ query: ghlApptsQuery }).catch(err => {
+        console.error('GHL ghl_appointments query failed:', err.message);
         return [[]]; // graceful fallback — don't break the whole page
       })
     ]);
 
     const leads = leadsData[0];
     const spend = spendData[0];
-    const ghlOpps = ghlData[0];
+    const ghlAppts = ghlData[0];
 
     // Create lookup maps
     const leadsMap = {};  // Meta leads by metaAccountId
     const spendMap = {};  // Spend by metaAccountId
-    const ghlMap = {};    // GHL opportunities by locationId
+    const ghlMap = {};    // GHL appointments by locationId
 
     leads.forEach(row => {
       leadsMap[row.metaAccountId] = parseInt(row.leads) || 0;
@@ -267,11 +268,13 @@ async function getAllAccounts(days = 30) {
       };
     });
 
-    ghlOpps.forEach(row => {
+    ghlAppts.forEach(row => {
       ghlMap[row.locationId] = {
-        ghlLeads: parseInt(row.ghlLeads) || 0,
-        won: parseInt(row.won) || 0,
-        lost: parseInt(row.lost) || 0
+        totalAppointments: parseInt(row.totalAppointments) || 0,
+        showed: parseInt(row.showed) || 0,
+        noshow: parseInt(row.noshow) || 0,
+        confirmed: parseInt(row.confirmed) || 0,
+        cancelled: parseInt(row.cancelled) || 0
       };
     });
 
@@ -281,7 +284,7 @@ async function getAllAccounts(days = 30) {
     CLIENTS.forEach(client => {
       const clientLeads = leadsMap[client.metaAccountId] || 0;
       const clientSpend = spendMap[client.metaAccountId] || { totalSpend: 0, totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
-      const clientGhl = ghlMap[client.ghlLocationId] || { ghlLeads: 0, won: 0, lost: 0 };
+      const clientGhl = ghlMap[client.ghlLocationId] || { totalAppointments: 0, showed: 0, noshow: 0, confirmed: 0, cancelled: 0 };
 
       const totalSpend = clientSpend.totalSpend;
       const cpl = clientLeads > 0 ? totalSpend / clientLeads : null;
@@ -297,8 +300,10 @@ async function getAllAccounts(days = 30) {
           monthlySpend: totalSpend,
           leads: clientLeads,
           costPerLead: cpl ? parseFloat(cpl.toFixed(2)) : null,
-          appointmentsBooked: clientGhl.ghlLeads,
-          conversionRate: clientLeads > 0 ? parseFloat(((clientGhl.ghlLeads / clientLeads) * 100).toFixed(2)) : 0,
+          appointmentsBooked: clientGhl.totalAppointments,
+          appointmentsShowed: clientGhl.showed,
+          appointmentsNoShow: clientGhl.noshow,
+          conversionRate: clientLeads > 0 ? parseFloat(((clientGhl.totalAppointments / clientLeads) * 100).toFixed(2)) : 0,
           roas: 0
         }
       });
