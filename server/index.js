@@ -265,19 +265,15 @@ app.get('/api/debug', async (req, res) => {
     results.queries.connection = e.message;
   }
 
-  // Run GHL diagnostic queries
+  // Run GHL diagnostic queries — explore stg_opportunities schema and data
   const queries = {};
   const fullQueries = {
-    ghl_data_all_counts: `SELECT 'Contacts' as tbl, COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Contacts\` UNION ALL SELECT 'Opportunities', COUNT(*) FROM \`dance-reporting.ghl_data.Opportunities\` UNION ALL SELECT 'Calendar_Events', COUNT(*) FROM \`dance-reporting.ghl_data.Calendar_Events\` UNION ALL SELECT 'Calendars', COUNT(*) FROM \`dance-reporting.ghl_data.Calendars\` UNION ALL SELECT 'Conversations', COUNT(*) FROM \`dance-reporting.ghl_data.Conversations\` UNION ALL SELECT 'Conversation_Messages', COUNT(*) FROM \`dance-reporting.ghl_data.Conversation_Messages\` UNION ALL SELECT 'Custom_Fields', COUNT(*) FROM \`dance-reporting.ghl_data.Custom_Fields\` UNION ALL SELECT 'Form_Submissions', COUNT(*) FROM \`dance-reporting.ghl_data.Form_Submissions\` UNION ALL SELECT 'Forms', COUNT(*) FROM \`dance-reporting.ghl_data.Forms\` UNION ALL SELECT 'Locations', COUNT(*) FROM \`dance-reporting.ghl_data.Locations\` UNION ALL SELECT 'Pipelines', COUNT(*) FROM \`dance-reporting.ghl_data.Pipelines\` UNION ALL SELECT 'Users', COUNT(*) FROM \`dance-reporting.ghl_data.Users\` UNION ALL SELECT 'Workflows', COUNT(*) FROM \`dance-reporting.ghl_data.Workflows\``,
-    ghl_master_tables: `SELECT table_name FROM \`dance-reporting.ghl_master.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
-    ghl_master_locations_sample: `SELECT * FROM \`dance-reporting.ghl_master.Locations\` LIMIT 3`,
-    airbyte_ops_tables: `SELECT table_name FROM \`dance-reporting.airbyte_ops.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
-    dataform_ghl_contacts_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_contacts\``,
-    dataform_ghl_opportunities_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_opportunities\``,
-    dataform_ghl_contact_master_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_contact_master\``,
-    dataform_ghl_opportunity_master_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_opportunity_master\``,
-    dataform_stg_contacts_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_contacts\``,
-    dataform_stg_opportunities_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_opportunities\``,
+    stg_opportunities_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'stg_opportunities' ORDER BY ordinal_position`,
+    stg_opportunities_sample: `SELECT * FROM \`dance-reporting.dataform.stg_opportunities\` LIMIT 3`,
+    stg_opportunities_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_opportunities\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
+    ghl_opportunities_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_opportunities' ORDER BY ordinal_position`,
+    ghl_contacts_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_contacts' ORDER BY ordinal_position`,
+    ghl_contacts_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_contacts\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
