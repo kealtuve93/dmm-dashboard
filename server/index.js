@@ -265,12 +265,16 @@ app.get('/api/debug', async (req, res) => {
     results.queries.connection = e.message;
   }
 
-  // Run leads query directly
+  // Run diagnostic queries
   const queries = {
-    leads: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
-    opportunities: `SELECT locationId, SUM(total_appts_booked) as opps FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
-    spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
+    leads_30d: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
     leads_all_time: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` GROUP BY locationId ORDER BY leads DESC LIMIT 5`,
+    spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
+    fb_tables: `SELECT table_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
+    fb_campaign_columns: `SELECT column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'basic_campaign' ORDER BY ordinal_position`,
+    fb_all_columns: `SELECT table_name, column_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE LOWER(column_name) LIKE '%lead%' OR LOWER(column_name) LIKE '%action%' OR LOWER(column_name) LIKE '%conver%' OR LOWER(column_name) LIKE '%result%' ORDER BY table_name, column_name`,
+    dataform_tables: `SELECT table_name FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
+    all_datasets: `SELECT schema_name FROM \`dance-reporting.INFORMATION_SCHEMA.SCHEMATA\` ORDER BY schema_name`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
