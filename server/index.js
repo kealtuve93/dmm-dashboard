@@ -268,18 +268,16 @@ app.get('/api/debug', async (req, res) => {
   // Run GHL diagnostic queries — explore appointments table
   const queries = {};
   const fullQueries = {
-    // 1. List ALL datasets in the project
-    all_datasets: `SELECT schema_name FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY schema_name`,
-    // 2. Dataform tables with row counts (using __TABLES__)
-    dataform_tables: `SELECT table_id, row_count, ROUND(size_bytes/1024/1024, 2) as size_mb FROM \`dance-reporting.dataform.__TABLES__\` ORDER BY row_count DESC`,
-    // 3. ghl_data tables with row counts
-    ghl_data_tables: `SELECT table_id, row_count FROM \`dance-reporting.ghl_data.__TABLES__\` ORDER BY row_count DESC`,
-    // 4. Search for appointment data in ANY table with rows > 0 in dataform
-    dataform_appt_search: `SELECT table_id, row_count FROM \`dance-reporting.dataform.__TABLES__\` WHERE LOWER(table_id) LIKE '%appoint%' OR LOWER(table_id) LIKE '%calendar%' OR LOWER(table_id) LIKE '%event%'`,
-    // 5. Try ghl_master
-    ghl_master_tables: `SELECT table_id, row_count FROM \`dance-reporting.ghl_master.__TABLES__\` ORDER BY row_count DESC LIMIT 20`,
-    // 6. Try airbyte datasets
-    airbyte_internal_tables: `SELECT table_id, row_count FROM \`dance-reporting.airbyte_internal.__TABLES__\` ORDER BY row_count DESC LIMIT 10`,
+    // 1. Raw Calendar_Events schema (Airbyte raw format)
+    raw_calendar_events_schema: `SELECT column_name, data_type FROM \`dance-reporting.airbyte_internal.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_data_raw__stream_Calendar_Events' ORDER BY ordinal_position`,
+    // 2. Raw Calendar_Events sample (3 rows)
+    raw_calendar_events_sample: `SELECT * FROM \`dance-reporting.airbyte_internal.ghl_data_raw__stream_Calendar_Events\` LIMIT 3`,
+    // 3. ghl_opportunities2 schema (90K rows - working transform!)
+    ghl_opportunities2_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_opportunities2' ORDER BY ordinal_position`,
+    // 4. ghl_opportunities2 sample
+    ghl_opportunities2_sample: `SELECT * FROM \`dance-reporting.dataform.ghl_opportunities2\` LIMIT 3`,
+    // 5. ghl_opportunities2 by location (top 10)
+    ghl_opportunities2_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_opportunities2\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
