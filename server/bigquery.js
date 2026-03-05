@@ -196,10 +196,11 @@ async function getAllAccounts(days = 30) {
     const startTime = Date.now();
 
     // Query 1: Leads per locationId (count opportunities as leads)
+    // createdAt is DATETIME in BigQuery — compare with DATETIME_SUB, not FORMAT_TIMESTAMP (STRING)
     const leadsQuery = `
       SELECT locationId, COUNT(*) as leads
       FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY))
+      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
       GROUP BY locationId
     `;
 
@@ -207,7 +208,7 @@ async function getAllAccounts(days = 30) {
     const opportunitiesQuery = `
       SELECT locationId, SUM(total_appts_booked) as opportunities
       FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY))
+      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
       GROUP BY locationId
     `;
 
