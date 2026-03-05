@@ -334,19 +334,19 @@ async function getAccountCampaigns(locationId) {
       return [];
     }
 
+    // Query per-day rows so we can build a proper dailyMetrics array per campaign
     const query = `
       SELECT campaign_id, campaign_name,
-             ROUND(SUM(spend), 2) as totalSpend,
-             SUM(impressions) as impressions,
-             SUM(inline_link_clicks) as clicks,
-             ROUND(AVG(ctr), 4) as avgCtr,
-             COUNT(DISTINCT date) as activeDays,
-             MAX(date) as lastDate
+             date,
+             ROUND(SUM(spend), 2) as dailySpend,
+             SUM(impressions) as dailyImpressions,
+             SUM(inline_link_clicks) as dailyClicks,
+             ROUND(AVG(ctr), 4) as avgCtr
       FROM \`dance-reporting.facebook_ads.basic_campaign\`
       WHERE CAST(account_id AS STRING) = @metaAccountId
       AND date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
-      GROUP BY campaign_id, campaign_name
-      ORDER BY totalSpend DESC
+      GROUP BY campaign_id, campaign_name, date
+      ORDER BY campaign_id, date ASC
     `;
 
     const options = {
@@ -358,31 +358,61 @@ async function getAccountCampaigns(locationId) {
 
     const [rows] = await bigqueryClient.query(options);
 
-    const campaigns = rows.map(row => {
-      const cpl = row.impressions > 0 ? row.totalSpend / row.clicks : null;
-      const roas = row.totalSpend > 0 ? (row.clicks * 30) / row.totalSpend : 0; // Assume $30 per click value
+    // Group rows by campaign_id, building dailyMetrics array
+    const campaignMap = {};
+    rows.forEach(row => {
+      const id = String(row.campaign_id);
+      if (!campaignMap[id]) {
+        campaignMap[id] = {
+          id,
+          name: row.campaign_name,
+          totalSpend: 0,
+          totalClicks: 0,
+          totalImpressions: 0,
+          lastDate: null,
+          lastAvgCtr: 0,
+          dailyMetrics: []
+        };
+      }
+      const c = campaignMap[id];
+      const daySpend = parseFloat(row.dailySpend) || 0;
+      const dayClicks = parseInt(row.dailyClicks) || 0;
+      c.dailyMetrics.push({
+        date: row.date,
+        spend: daySpend,
+        leads: 0,
+        appointments: 0
+      });
+      c.totalSpend += daySpend;
+      c.totalClicks += dayClicks;
+      c.totalImpressions += parseInt(row.dailyImpressions) || 0;
+      c.lastDate = row.date; // rows ordered ASC, so last = most recent
+      c.lastAvgCtr = parseFloat(row.avgCtr) || 0;
+    });
 
-      // Determine status based on last 7 days
-      const daysAgo = Math.floor((new Date() - new Date(row.lastDate)) / (1000 * 60 * 60 * 24));
+    return Object.values(campaignMap).map(c => {
+      const cpl = c.totalClicks > 0 ? c.totalSpend / c.totalClicks : null;
+      const roas = c.totalSpend > 0 ? (c.totalClicks * 30) / c.totalSpend : 0;
+      const daysAgo = c.lastDate
+        ? Math.floor((new Date() - new Date(c.lastDate)) / (1000 * 60 * 60 * 24))
+        : 999;
       const isActive = daysAgo <= 7;
 
       return {
-        id: row.campaign_id,
-        name: row.campaign_name,
+        id: c.id,
+        name: c.name,
         status: isActive ? 'active' : 'paused',
-        offerType: inferOfferType(row.campaign_name),
+        offerType: inferOfferType(c.name),
         currentCPL: cpl ? parseFloat(cpl.toFixed(2)) : null,
-        currentCTR: parseFloat((row.avgCtr * 100).toFixed(2)),
+        currentCTR: parseFloat((c.lastAvgCtr * 100).toFixed(2)),
         currentRoas: parseFloat(roas.toFixed(2)),
-        dailyMetrics: {
-          spend: row.totalSpend,
-          impressions: row.impressions,
-          clicks: row.clicks
-        }
+        dailyMetrics: c.dailyMetrics
       };
+    }).sort((a, b) => {
+      const spendA = a.dailyMetrics.reduce((s, d) => s + d.spend, 0);
+      const spendB = b.dailyMetrics.reduce((s, d) => s + d.spend, 0);
+      return spendB - spendA;
     });
-
-    return campaigns;
   } catch (error) {
     console.error('Error fetching campaigns:', error.message);
     return [];
