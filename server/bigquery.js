@@ -195,24 +195,22 @@ async function getAllAccounts(days = 30) {
 
     const startTime = Date.now();
 
-    // Query 1: Leads per locationId (count opportunities as leads)
-    // createdAt is DATETIME in BigQuery — compare with DATETIME_SUB, not FORMAT_TIMESTAMP (STRING)
+    // Query 1: Leads per Meta account (from Meta's own action tracking)
+    // basic_campaign_actions stores Meta's action breakdowns per campaign per day
+    // action_type 'lead' = Facebook Lead Form submissions
+    // action_type containing 'lead' catches pixel-tracked leads too
     const leadsQuery = `
-      SELECT locationId, COUNT(*) as leads
-      FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
-      GROUP BY locationId
+      SELECT CAST(bc.account_id AS STRING) as metaAccountId,
+             SUM(CAST(bca.value AS FLOAT64)) as leads
+      FROM \`dance-reporting.facebook_ads.basic_campaign_actions\` bca
+      JOIN \`dance-reporting.facebook_ads.basic_campaign\` bc
+        ON bca.campaign_id = bc.campaign_id AND bca.date = bc.date
+      WHERE bca.action_type IN ('lead', 'offsite_conversion.fb_pixel_lead')
+        AND bca.date >= DATE_SUB(CURRENT_DATE(), INTERVAL ${days} DAY)
+      GROUP BY bc.account_id
     `;
 
-    // Query 2: Booked appointments per locationId
-    const opportunitiesQuery = `
-      SELECT locationId, SUM(total_appts_booked) as opportunities
-      FROM \`dance-reporting.dataform.ghl_opportunities\`
-      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
-      GROUP BY locationId
-    `;
-
-    // Query 3: Spend per account
+    // Query 2: Spend + metrics per account (same as before)
     const spendQuery = `
       SELECT CAST(account_id AS STRING) as metaAccountId,
              ROUND(SUM(spend), 2) as totalSpend,
@@ -224,27 +222,20 @@ async function getAllAccounts(days = 30) {
       GROUP BY account_id
     `;
 
-    const [leadsData, opportunitiesData, spendData] = await Promise.all([
+    const [leadsData, spendData] = await Promise.all([
       bigqueryClient.query({ query: leadsQuery }),
-      bigqueryClient.query({ query: opportunitiesQuery }),
       bigqueryClient.query({ query: spendQuery })
     ]);
 
     const leads = leadsData[0];
-    const opportunities = opportunitiesData[0];
     const spend = spendData[0];
 
-    // Create lookup maps
+    // Create lookup maps — both keyed by metaAccountId now
     const leadsMap = {};
-    const opportunitiesMap = {};
     const spendMap = {};
 
     leads.forEach(row => {
-      leadsMap[row.locationId] = row.leads || 0;
-    });
-
-    opportunities.forEach(row => {
-      opportunitiesMap[row.locationId] = row.opportunities || 0;
+      leadsMap[row.metaAccountId] = parseInt(row.leads) || 0;
     });
 
     spend.forEach(row => {
@@ -260,31 +251,26 @@ async function getAllAccounts(days = 30) {
     const results = [];
 
     CLIENTS.forEach(client => {
-      const clientLeads = leadsMap[client.ghlLocationId] || 0;
-      const clientOpportunities = opportunitiesMap[client.ghlLocationId] || 0;
+      const clientLeads = leadsMap[client.metaAccountId] || 0;
       const clientSpend = spendMap[client.metaAccountId] || { totalSpend: 0, totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
 
       const totalSpend = clientSpend.totalSpend;
       const cpl = clientLeads > 0 ? totalSpend / clientLeads : null;
-      const status = getHealthStatus(totalSpend, clientLeads, clientOpportunities);
-
-      // Calculate additional metrics
-      const conversionRate = clientLeads > 0 ? (clientOpportunities / clientLeads) * 100 : 0;
-      const roas = totalSpend > 0 ? (clientOpportunities * 150) / totalSpend : 0; // Assume $150 value per appointment
+      const status = getHealthStatus(totalSpend, clientLeads, 0);
 
       results.push({
         id: client.id,
         name: client.name,
         accountManager: client.accountManager,
         status: status,
-        statusReason: getStatusReason(status, cpl || 0, clientOpportunities, totalSpend),
+        statusReason: getStatusReason(status, cpl || 0, 0, totalSpend),
         metrics: {
           monthlySpend: totalSpend,
           leads: clientLeads,
           costPerLead: cpl ? parseFloat(cpl.toFixed(2)) : null,
-          appointmentsBooked: clientOpportunities,
-          conversionRate: parseFloat(conversionRate.toFixed(2)),
-          roas: parseFloat(roas.toFixed(2))
+          appointmentsBooked: 0, // GHL appointments not available yet
+          conversionRate: 0,
+          roas: 0
         }
       });
     });

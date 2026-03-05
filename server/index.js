@@ -265,19 +265,13 @@ app.get('/api/debug', async (req, res) => {
     results.queries.connection = e.message;
   }
 
-  // Run diagnostic queries — "full" queries return all rows, not just sample
+  // Run diagnostic queries
   const queries = {
-    leads_all_time: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` GROUP BY locationId ORDER BY leads DESC LIMIT 5`,
     spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
   };
   const fullQueries = {
-    fb_lead_action_columns: `SELECT table_name, column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE LOWER(column_name) LIKE '%lead%' OR LOWER(column_name) LIKE '%action%' OR LOWER(column_name) LIKE '%conver%' OR LOWER(column_name) LIKE '%result%' ORDER BY table_name, column_name`,
-    dataform_tables: `SELECT table_name FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
-    all_datasets: `SELECT schema_name FROM \`dance-reporting.INFORMATION_SCHEMA.SCHEMATA\` ORDER BY schema_name`,
-    basic_campaign_columns: `SELECT column_name, data_type FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'basic_campaign' ORDER BY ordinal_position`,
-    ghl_data_tables: `SELECT table_name FROM \`dance-reporting.ghl_data.INFORMATION_SCHEMA.TABLES\` ORDER BY table_name`,
-    ghl_data_row_counts: `SELECT 'Contacts' as tbl, COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Contacts\` UNION ALL SELECT 'Opportunities', COUNT(*) FROM \`dance-reporting.ghl_data.Opportunities\``,
-    action_tables_sample: `SELECT table_name, column_name FROM \`dance-reporting.facebook_ads.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name LIKE '%action%' OR table_name LIKE '%lead%' ORDER BY table_name, column_name`,
+    meta_action_types: `SELECT action_type, COUNT(*) as rows, SUM(CAST(value AS FLOAT64)) as total_value FROM \`dance-reporting.facebook_ads.basic_campaign_actions\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY action_type ORDER BY total_value DESC`,
+    meta_leads_by_account: `SELECT CAST(bc.account_id AS STRING) as metaAccountId, SUM(CAST(bca.value AS FLOAT64)) as leads FROM \`dance-reporting.facebook_ads.basic_campaign_actions\` bca JOIN \`dance-reporting.facebook_ads.basic_campaign\` bc ON bca.campaign_id = bc.campaign_id AND bca.date = bc.date WHERE bca.action_type IN ('lead', 'offsite_conversion.fb_pixel_lead') AND bca.date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY bc.account_id ORDER BY leads DESC LIMIT 10`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
