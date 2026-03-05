@@ -568,9 +568,6 @@ function getConnectedStatus() {
   return isConnected;
 }
 
-// Initialize on module load
-initialize();
-
 module.exports = {
   initialize,
   isConnected: getConnectedStatus,
