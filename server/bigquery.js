@@ -224,13 +224,14 @@ async function getAllAccounts(days = 30) {
 
     // Query 3: GHL opportunities from stg_opportunities (96K rows)
     // stg_opportunities has data; ghl_opportunities is empty due to broken Dataform transform
+    // createdAt is TIMESTAMP in stg_opportunities — use TIMESTAMP_SUB, not DATETIME_SUB
     const ghlOppsQuery = `
       SELECT locationId,
              COUNT(*) as ghlLeads,
              COUNTIF(status = 'won') as won,
              COUNTIF(status = 'lost') as lost
       FROM \`dance-reporting.dataform.stg_opportunities\`
-      WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL ${days} DAY)
+      WHERE createdAt >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY)
       GROUP BY locationId
     `;
 
