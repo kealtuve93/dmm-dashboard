@@ -236,12 +236,47 @@ async function getAllAccounts(days = 30) {
       GROUP BY locationId
     `;
 
-    // Run all three queries in parallel
-    const [leadsData, spendData, oppsData] = await Promise.all([
+    // Query 4: GHL Appointments from raw Airbyte Calendar_Events
+    // Raw table has duplicates (one row per sync per record), so we deduplicate
+    // by appointment id, keeping only the latest version of each appointment
+    const apptsQuery = `
+      WITH deduped AS (
+        SELECT
+          JSON_EXTRACT_SCALAR(_airbyte_data, '$.id') as appt_id,
+          JSON_EXTRACT_SCALAR(_airbyte_data, '$.locationId') as locationId,
+          JSON_EXTRACT_SCALAR(_airbyte_data, '$.appointmentStatus') as appointmentStatus,
+          JSON_EXTRACT_SCALAR(_airbyte_data, '$.startTime') as startTime,
+          JSON_EXTRACT_SCALAR(_airbyte_data, '$.deleted') as deleted,
+          ROW_NUMBER() OVER (
+            PARTITION BY JSON_EXTRACT_SCALAR(_airbyte_data, '$.id')
+            ORDER BY _airbyte_extracted_at DESC
+          ) as rn
+        FROM \`dance-reporting.airbyte_internal.ghl_data_raw__stream_Calendar_Events\`
+      )
+      SELECT locationId,
+             COUNT(*) as totalAppointments,
+             COUNTIF(appointmentStatus = 'showed') as showed,
+             COUNTIF(appointmentStatus = 'noshow') as noshow,
+             COUNTIF(appointmentStatus = 'confirmed') as confirmed,
+             COUNTIF(appointmentStatus = 'cancelled') as cancelled
+      FROM deduped
+      WHERE rn = 1
+        AND deleted = 'false'
+        AND PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', startTime)
+            >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${days} DAY)
+      GROUP BY locationId
+    `;
+
+    // Run all four queries in parallel
+    const [leadsData, spendData, oppsData, apptsData] = await Promise.all([
       bigqueryClient.query({ query: leadsQuery }),
       bigqueryClient.query({ query: spendQuery }),
       bigqueryClient.query({ query: oppsQuery }).catch(err => {
         console.error('ghl_opportunities2 query failed:', err.message);
+        return [[]];
+      }),
+      bigqueryClient.query({ query: apptsQuery }).catch(err => {
+        console.error('Raw Calendar_Events appointments query failed:', err.message);
         return [[]];
       })
     ]);
@@ -249,11 +284,13 @@ async function getAllAccounts(days = 30) {
     const leads = leadsData[0];
     const spend = spendData[0];
     const opps = oppsData[0];
+    const appts = apptsData[0];
 
     // Create lookup maps
     const leadsMap = {};  // Meta leads by metaAccountId
     const spendMap = {};  // Spend by metaAccountId
     const oppsMap = {};   // GHL opportunities by locationId
+    const apptsMap = {};  // GHL appointments by locationId (deduplicated)
 
     leads.forEach(row => {
       leadsMap[row.metaAccountId] = parseInt(row.leads) || 0;
@@ -277,6 +314,16 @@ async function getAllAccounts(days = 30) {
       };
     });
 
+    appts.forEach(row => {
+      apptsMap[row.locationId] = {
+        totalAppointments: parseInt(row.totalAppointments) || 0,
+        showed: parseInt(row.showed) || 0,
+        noshow: parseInt(row.noshow) || 0,
+        confirmed: parseInt(row.confirmed) || 0,
+        cancelled: parseInt(row.cancelled) || 0
+      };
+    });
+
     // Build results — combine Meta spend/leads with GHL opportunity data
     const results = [];
 
@@ -284,6 +331,7 @@ async function getAllAccounts(days = 30) {
       const clientLeads = leadsMap[client.metaAccountId] || 0;
       const clientSpend = spendMap[client.metaAccountId] || { totalSpend: 0, totalImpressions: 0, totalClicks: 0, avgCtr: 0 };
       const clientOpps = oppsMap[client.ghlLocationId] || { totalOpps: 0, won: 0, lost: 0, open: 0 };
+      const clientAppts = apptsMap[client.ghlLocationId] || { totalAppointments: 0, showed: 0, noshow: 0, confirmed: 0, cancelled: 0 };
 
       const totalSpend = clientSpend.totalSpend;
       const cpl = clientLeads > 0 ? totalSpend / clientLeads : null;
@@ -299,6 +347,9 @@ async function getAllAccounts(days = 30) {
           monthlySpend: totalSpend,
           leads: clientLeads,
           costPerLead: cpl ? parseFloat(cpl.toFixed(2)) : null,
+          appointments: clientAppts.totalAppointments,
+          appointmentsShowed: clientAppts.showed,
+          appointmentsNoShow: clientAppts.noshow,
           opportunities: clientOpps.totalOpps,
           opportunitiesWon: clientOpps.won,
           opportunitiesLost: clientOpps.lost,

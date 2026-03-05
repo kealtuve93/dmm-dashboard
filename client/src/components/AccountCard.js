@@ -73,12 +73,12 @@ function AccountCard({ account }) {
           <span className="metric-value">{account.metrics.leads}</span>
         </div>
         <div className="metric">
-          <span className="metric-label">Opps</span>
-          <span className="metric-value">{account.metrics.opportunities || 0}</span>
+          <span className="metric-label">Appts</span>
+          <span className="metric-value">{account.metrics.appointments || 0}</span>
         </div>
         <div className="metric">
-          <span className="metric-label">Won</span>
-          <span className="metric-value">{account.metrics.opportunitiesWon || 0}</span>
+          <span className="metric-label">Opps</span>
+          <span className="metric-value">{account.metrics.opportunities || 0}</span>
         </div>
       </div>
     </div>

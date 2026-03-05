@@ -127,6 +127,10 @@ function AccountDetail() {
           <span className="metric-value">{account.metrics.leads}</span>
         </div>
         <div className="metric-card">
+          <span className="metric-label">Appointments</span>
+          <span className="metric-value">{account.metrics.appointments || 0}</span>
+        </div>
+        <div className="metric-card">
           <span className="metric-label">Opportunities</span>
           <span className="metric-value">{account.metrics.opportunities || 0}</span>
         </div>
