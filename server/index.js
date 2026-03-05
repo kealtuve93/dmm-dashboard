@@ -267,9 +267,10 @@ app.get('/api/debug', async (req, res) => {
 
   // Run leads query directly
   const queries = {
-    leads: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)) GROUP BY locationId LIMIT 5`,
-    opportunities: `SELECT locationId, SUM(total_appts_booked) as opps FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)) GROUP BY locationId LIMIT 5`,
+    leads: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
+    opportunities: `SELECT locationId, SUM(total_appts_booked) as opps FROM \`dance-reporting.dataform.ghl_opportunities\` WHERE createdAt >= DATETIME_SUB(CURRENT_DATETIME(), INTERVAL 30 DAY) GROUP BY locationId LIMIT 5`,
     spend: `SELECT CAST(account_id AS STRING) as metaAccountId, ROUND(SUM(spend), 2) as totalSpend FROM \`dance-reporting.facebook_ads.basic_campaign\` WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) GROUP BY account_id LIMIT 5`,
+    leads_all_time: `SELECT locationId, COUNT(*) as leads FROM \`dance-reporting.dataform.ghl_opportunities\` GROUP BY locationId ORDER BY leads DESC LIMIT 5`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
