@@ -265,15 +265,15 @@ app.get('/api/debug', async (req, res) => {
     results.queries.connection = e.message;
   }
 
-  // Run GHL diagnostic queries — explore stg_opportunities schema and data
+  // Run GHL diagnostic queries — explore appointments table
   const queries = {};
   const fullQueries = {
-    stg_opportunities_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'stg_opportunities' ORDER BY ordinal_position`,
-    stg_opportunities_sample: `SELECT * FROM \`dance-reporting.dataform.stg_opportunities\` LIMIT 3`,
-    stg_opportunities_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_opportunities\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
-    ghl_opportunities_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_opportunities' ORDER BY ordinal_position`,
-    ghl_contacts_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_contacts' ORDER BY ordinal_position`,
-    ghl_contacts_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_contacts\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
+    ghl_appointments_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_appointments' ORDER BY ordinal_position`,
+    ghl_appointments_sample: `SELECT * FROM \`dance-reporting.dataform.ghl_appointments\` LIMIT 3`,
+    ghl_appointments_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\``,
+    ghl_appointments_by_location: `SELECT locationId, COUNT(*) as cnt FROM \`dance-reporting.dataform.ghl_appointments\` GROUP BY locationId ORDER BY cnt DESC LIMIT 10`,
+    ghl_calendars_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'ghl_calendars' ORDER BY ordinal_position`,
+    calendar_events_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.ghl_data.Calendar_Events\``,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
