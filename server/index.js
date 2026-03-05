@@ -268,33 +268,18 @@ app.get('/api/debug', async (req, res) => {
   // Run GHL diagnostic queries — explore appointments table
   const queries = {};
   const fullQueries = {
-    // 1. Find all appointment-related tables across ALL datasets
-    appt_tables_all_datasets: `
-      SELECT table_schema as dataset, table_name, row_count
-      FROM \`dance-reporting.region-us.INFORMATION_SCHEMA.TABLE_STORAGE\`
-      WHERE LOWER(table_name) LIKE '%appoint%' OR LOWER(table_name) LIKE '%calendar%'
-      ORDER BY table_schema, table_name
-    `,
-    // 2. List all tables in ghl_master with row counts
-    ghl_master_tables: `
-      SELECT table_name, row_count
-      FROM \`dance-reporting.ghl_master.INFORMATION_SCHEMA.TABLE_STORAGE\`
-      ORDER BY row_count DESC
-      LIMIT 20
-    `,
-    // 3. Check for stg_appointments in dataform
-    stg_appointments_count: `SELECT COUNT(*) as cnt FROM \`dance-reporting.dataform.stg_appointments\``,
-    // 4. stg_appointments schema if it exists
-    stg_appointments_schema: `SELECT column_name, data_type FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.COLUMNS\` WHERE table_name = 'stg_appointments' ORDER BY ordinal_position`,
-    // 5. stg_appointments sample
-    stg_appointments_sample: `SELECT * FROM \`dance-reporting.dataform.stg_appointments\` LIMIT 3`,
-    // 6. All dataform tables with row counts
-    dataform_tables: `
-      SELECT table_name, row_count
-      FROM \`dance-reporting.dataform.INFORMATION_SCHEMA.TABLE_STORAGE\`
-      ORDER BY row_count DESC
-      LIMIT 30
-    `,
+    // 1. List ALL datasets in the project
+    all_datasets: `SELECT schema_name FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY schema_name`,
+    // 2. Dataform tables with row counts (using __TABLES__)
+    dataform_tables: `SELECT table_id, row_count, ROUND(size_bytes/1024/1024, 2) as size_mb FROM \`dance-reporting.dataform.__TABLES__\` ORDER BY row_count DESC`,
+    // 3. ghl_data tables with row counts
+    ghl_data_tables: `SELECT table_id, row_count FROM \`dance-reporting.ghl_data.__TABLES__\` ORDER BY row_count DESC`,
+    // 4. Search for appointment data in ANY table with rows > 0 in dataform
+    dataform_appt_search: `SELECT table_id, row_count FROM \`dance-reporting.dataform.__TABLES__\` WHERE LOWER(table_id) LIKE '%appoint%' OR LOWER(table_id) LIKE '%calendar%' OR LOWER(table_id) LIKE '%event%'`,
+    // 5. Try ghl_master
+    ghl_master_tables: `SELECT table_id, row_count FROM \`dance-reporting.ghl_master.__TABLES__\` ORDER BY row_count DESC LIMIT 20`,
+    // 6. Try airbyte datasets
+    airbyte_internal_tables: `SELECT table_id, row_count FROM \`dance-reporting.airbyte_internal.__TABLES__\` ORDER BY row_count DESC LIMIT 10`,
   };
 
   // We need direct bigqueryClient access - re-run via module internals
